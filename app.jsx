@@ -14,6 +14,7 @@ const SECTIONS = [
 ];
 
 function NavProgress() {
+  const totalStars = (window.GIT_MISSIONS ? window.GIT_MISSIONS.length : 30) * 3;
   const [stars, setStars] = React.useState(() => {
     try {
       const p = JSON.parse(localStorage.getItem("git-guide-progress-v1")) || {};
@@ -33,8 +34,8 @@ function NavProgress() {
   return (
     <div className="nav-progress" title="Estrellas ganadas en las misiones">
       <span style={{ color: "var(--green)" }}>★</span>
-      <span>{stars}/60</span>
-      <div className="bar"><div style={{ width: (stars / 60 * 100) + "%" }}></div></div>
+      <span>{stars}/{totalStars}</span>
+      <div className="bar"><div style={{ width: (stars / totalStars * 100) + "%" }}></div></div>
     </div>
   );
 }

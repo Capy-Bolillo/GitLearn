@@ -1,5 +1,5 @@
 // ============================================================
-// missions-data.js — 20 misiones con dificultad
+// missions-data.js — 30 misiones con dificultad
 // Cada misión: setup(engine) -> ctx, goal(engine, ctx) -> bool
 // "par" = nº de comandos git que cuentan (ver engine) para 3★
 // ============================================================
@@ -359,6 +359,278 @@
         && e.state.remote.branches.main === e.headId()
         && t["header.css"] !== undefined
         && t["contacto.html"] !== undefined;
+    },
+  });
+
+  // ---------------- ÁMBITO REAL ----------------
+  m({
+    id: "onboarding-repo", num: 21, diff: "media", title: "Onboarding a un repo vivo",
+    context: "Primer día en el equipo de plataforma. Te pasan `github.com/acme/platform.git`; antes de tocar código necesitas clonar, revisar que el árbol esté limpio y entender los últimos commits.",
+    briefing: "Te unes a un proyecto existente y necesitas entrar con calma: clonar, mirar estado y leer historial antes de editar.",
+    deliverable: "Clona `github.com/acme/platform.git`, ejecuta `git status` y revisa el historial con `git log`.",
+    objective: "Clona el repositorio, inspecciona el estado y revisa el historial.",
+    watch: "El árbol debe aparecer completo después de `git clone`; `HEAD → main` y `origin/main` quedan sobre el mismo commit.",
+    par: 1,
+    hints: ["Empieza con `git clone github.com/acme/platform.git`.", "Después usa `git status` para comprobar que no hay cambios locales.", "`git log` te da el mapa inicial del historial."],
+    setup(e) {
+      e._setup.remoteOnly("github.com/acme/platform.git");
+      e._setup.remoteCommit("bootstrap del servicio", { "README.md": "# Platform" });
+      e._setup.remoteCommit("agrega healthcheck", { "healthcheck.js": "export const ok = true" });
+      e._setup.remoteCommit("documenta despliegue", { "deploy.md": "npm run deploy" });
+      return {};
+    },
+    goal(e) {
+      return e.state.initialized
+        && e.state.stats.ranStatus
+        && e.state.stats.ranLog
+        && e.state.files["README.md"] !== undefined;
+    },
+  });
+
+  m({
+    id: "ticket-branch", num: 22, diff: "media", title: "Rama para un ticket",
+    context: "Te asignan el ticket LOGIN-184. Antes de abrir la rama, main recibió pruebas nuevas de QA; si no sincronizas, empezarás desde una base vieja.",
+    briefing: "En un equipo real, una rama de tarea debe nacer desde main actualizado, no desde el main que tenías ayer.",
+    deliverable: "Trae lo último con `git pull` y crea/cámbiate a `feature/login-rate-limit`.",
+    objective: "Sincroniza main y crea la rama de trabajo `feature/login-rate-limit`.",
+    watch: "Después del pull, main avanza hasta origin/main; después de `switch -c`, la etiqueta HEAD salta a tu rama nueva.",
+    par: 2,
+    hints: ["Primero `git pull` para traer el commit de QA.", "Luego `git switch -c feature/login-rate-limit`.", "La rama nueva debe quedar parada en el último commit de main."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("login.js", "export function login() {}"); e._setup.stage("login.js");
+      e._setup.commit("login base");
+      e._setup.addRemote("github.com/acme/auth.git");
+      e._setup.remoteCommit("QA: pruebas de login", { "tests/login.spec.js": "it('valida bloqueo')" });
+      return {};
+    },
+    goal(e) {
+      return e.state.HEAD
+        && e.state.HEAD.branch === "feature/login-rate-limit"
+        && e.state.files["tests/login.spec.js"] !== undefined;
+    },
+  });
+
+  m({
+    id: "commit-selectivo", num: 23, diff: "media", title: "Commit quirúrgico",
+    context: "Tocaste dos archivos: `checkout.js` corrige el cupón del ticket y `analytics.js` tiene pruebas locales que todavía no deben salir. El PR debe llevar solo el arreglo.",
+    briefing: "Un commit profesional cuenta una historia pequeña. No metas ruido local si no pertenece al cambio.",
+    deliverable: "Commitea solo `checkout.js`; deja `analytics.js` modificado en tu carpeta, pero fuera del historial.",
+    objective: "Haz un commit selectivo con solo el archivo del arreglo.",
+    watch: "El nuevo nodo debe cambiar `checkout.js`; `analytics.js` seguirá como modificado en la carpeta de trabajo.",
+    par: 2,
+    hints: ["No uses `git add .` aquí.", "Prepara solo el archivo correcto: `git add checkout.js`.", "Luego `git commit -m \"corrige cupon en checkout\"`."],
+    setup(e) {
+      e._setup.init();
+      e._setup.writeFile("checkout.js", "export const total = carrito.total");
+      e._setup.writeFile("analytics.js", "track('view')");
+      e._setup.stage("checkout.js"); e._setup.stage("analytics.js");
+      e._setup.commit("checkout inicial");
+      e._setup.writeFile("checkout.js", "export const total = aplicarCupon(carrito.total)");
+      e._setup.writeFile("analytics.js", "track('debug-local')");
+      return {};
+    },
+    goal(e) {
+      const t = e.treeOf(e.headId());
+      const h = e.state.commits[e.headId()];
+      return h
+        && h.parents.length === 1
+        && t["checkout.js"] === "export const total = aplicarCupon(carrito.total)"
+        && t["analytics.js"] === "track('view')"
+        && e.state.files["analytics.js"] === "track('debug-local')";
+    },
+  });
+
+  m({
+    id: "pr-sync", num: 24, diff: "dificil", title: "Actualiza tu PR",
+    context: "Tu rama `feature/carrito` ya tiene un commit, pero main avanzó en remoto con cambios de diseño. Antes de pedir review, integra origin/main y publica tu rama.",
+    briefing: "Cuando un PR queda atrasado, lo normal es traer main, mezclarlo en tu rama y empujar la rama actualizada.",
+    deliverable: "Ejecuta `git fetch`, fusiona `origin/main` en tu rama y publica `feature/carrito` con `git push`.",
+    objective: "Actualiza tu rama de PR con lo último de main y súbela al remoto.",
+    watch: "Fetch mueve `origin/main`; el merge une tu rama con la base nueva; push crea `origin/feature/carrito`.",
+    par: 3,
+    hints: ["Estás parado en `feature/carrito`.", "`git fetch` descarga el main nuevo sin tocar tu rama.", "Después usa `git merge origin/main` y cierra con `git push`."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("cart.js", "export const cart = []"); e._setup.stage("cart.js");
+      e._setup.commit("carrito base");
+      e._setup.addRemote("github.com/acme/shop.git");
+      e._setup.branch("feature/carrito");
+      e._setup.switchTo("feature/carrito");
+      e._setup.writeFile("cart.js", "export const cart = ['coupon']");
+      e._setup.stage("cart.js"); e._setup.commit("agrega cupones al carrito");
+      e._setup.remoteCommit("UI: header responsive", { "header.css": "header { display: grid }" });
+      return {};
+    },
+    goal(e) {
+      const t = e.treeOf(e.headId());
+      return e.state.HEAD.branch === "feature/carrito"
+        && e.state.remote.branches["feature/carrito"] === e.headId()
+        && t["cart.js"] === "export const cart = ['coupon']"
+        && t["header.css"] !== undefined;
+    },
+  });
+
+  m({
+    id: "hotfix-produccion", num: 25, diff: "dificil", title: "Hotfix de producción",
+    context: "Producción está cobrando doble en algunos pedidos. Necesitas aislar el arreglo en una rama `hotfix/pagos`, probarlo rápido, fusionarlo a main y publicarlo.",
+    briefing: "Un hotfix real no se mezcla con otros cambios: rama corta, commit claro, merge a main y push.",
+    deliverable: "Crea `hotfix/pagos`, corrige `payments.js`, haz commit, vuelve a main, fusiona y empuja.",
+    objective: "Resuelve el hotfix en una rama y deja main publicado con el arreglo.",
+    watch: "El árbol primero abre una rama corta y luego main avanza hasta ese commit por fast-forward.",
+    par: 6,
+    hints: ["Crea la rama con `git switch -c hotfix/pagos`.", "Edita con `echo \"export const cobrar = total => total\" > payments.js`.", "Haz add + commit, vuelve a `main`, `git merge hotfix/pagos` y `git push`."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("payments.js", "export const cobrar = total => total * 2"); e._setup.stage("payments.js");
+      e._setup.commit("servicio de pagos");
+      e._setup.addRemote("github.com/acme/billing.git");
+      return {};
+    },
+    goal(e) {
+      const t = e.treeOf(e.headId());
+      return e.state.HEAD.branch === "main"
+        && e.state.remote.branches.main === e.headId()
+        && t["payments.js"] === "export const cobrar = total => total";
+    },
+  });
+
+  m({
+    id: "release-branch", num: 26, diff: "dificil", title: "Integra una release branch",
+    context: "El equipo de release preparó `release/1.4` directamente en origin. Tu main local aún no conoce esa rama; tráela, revisa el mapa y mézclala.",
+    briefing: "Las ramas remotas no aparecen por magia. Fetch actualiza tu vista de origin y luego decides qué integrar.",
+    deliverable: "Haz `git fetch`, revisa con `git log` si quieres, y fusiona `origin/release/1.4` en main.",
+    objective: "Trae e integra la rama remota `release/1.4`.",
+    watch: "Fetch crea la etiqueta `origin/release/1.4`; el merge avanza main hasta la release.",
+    par: 2,
+    hints: ["Primero `git fetch`.", "La rama remota se fusiona como `git merge origin/release/1.4`.", "`git log` no penaliza estrellas y te ayuda a ver la ruta."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("app.js", "export const version = '1.3'"); e._setup.stage("app.js");
+      e._setup.commit("release 1.3");
+      e._setup.addRemote("github.com/acme/app.git");
+      const base = e.state.remote.branches.main;
+      e.state.remote.branches["release/1.4"] = base;
+      e._setup.remoteCommit("release 1.4 preparada", { "CHANGELOG.md": "## 1.4\n- mejoras de pago" }, "release/1.4");
+      return {};
+    },
+    goal(e) {
+      const t = e.treeOf(e.headId());
+      return e.state.stats.ranFetch
+        && e.state.HEAD.branch === "main"
+        && t["CHANGELOG.md"] !== undefined;
+    },
+  });
+
+  m({
+    id: "conflicto-pr", num: 27, diff: "dificil", title: "Conflicto antes del review",
+    context: "Tu PR cambia el cálculo de precios, pero main también tocó `pricing.js`. Antes de pedir review debes traer main a tu rama y resolver el conflicto.",
+    briefing: "Resolver conflictos en tu rama mantiene el PR revisable: integras main, decides el contenido final y cierras el merge.",
+    deliverable: "Fusiona `main` en `feature/pricing`, resuelve `pricing.js` y completa el commit de merge.",
+    objective: "Resuelve el conflicto entre main y tu rama de PR.",
+    watch: "El merge crea un nodo con dos padres; si quedan marcas `<<<<<<<`, la misión no termina.",
+    par: 3,
+    hints: ["Empieza con `git merge main`.", "Mira el archivo con `cat pricing.js`.", "Puedes resolver con `echo \"export const price = base => base * 0.9\" > pricing.js`, luego `git add pricing.js` y `git commit -m \"resuelve conflicto de precios\"`."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("pricing.js", "export const price = base => base"); e._setup.stage("pricing.js");
+      e._setup.commit("pricing base");
+      e._setup.branch("feature/pricing");
+      e._setup.switchTo("feature/pricing");
+      e._setup.writeFile("pricing.js", "export const price = base => base * 0.9"); e._setup.stage("pricing.js");
+      e._setup.commit("descuento del ticket");
+      e._setup.switchTo("main");
+      e._setup.writeFile("pricing.js", "export const price = base => Math.round(base)"); e._setup.stage("pricing.js");
+      e._setup.commit("redondea precios");
+      e._setup.switchTo("feature/pricing");
+      return {};
+    },
+    goal(e) {
+      const h = e.state.commits[e.headId()];
+      const content = e.state.files["pricing.js"] || "";
+      return e.state.HEAD.branch === "feature/pricing"
+        && h && h.parents.length === 2
+        && e.state.conflicts.length === 0
+        && !content.includes("<<<<<<<");
+    },
+  });
+
+  m({
+    id: "secreto-prepush", num: 28, diff: "dificil", title: "Secreto antes del push",
+    context: "Preparaste `.env` y `.env.example`, pero solo la plantilla debe llegar al PR. El secreto real debe quedarse local y sin commitear.",
+    briefing: "El error más caro en Git suele ser publicar secretos. Antes del commit, revisa staging y saca lo que no pertenece.",
+    deliverable: "Saca `.env` del staging, commitea `.env.example` y sube tu rama `feature/env-template`.",
+    objective: "Publica solo la plantilla de entorno, no el secreto local.",
+    watch: "El panel de staging debe quedarse solo con `.env.example`; origin recibe la rama sin `.env` en el árbol.",
+    par: 3,
+    hints: ["Usa `git restore --staged .env`.", "Después `git commit -m \"agrega plantilla de entorno\"`.", "Cierra con `git push` desde `feature/env-template`."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("README.md", "# API"); e._setup.stage("README.md");
+      e._setup.commit("inicio api");
+      e._setup.addRemote("github.com/acme/api.git");
+      e._setup.branch("feature/env-template");
+      e._setup.switchTo("feature/env-template");
+      e._setup.writeFile(".env", "STRIPE_SECRET=sk_live_123");
+      e._setup.writeFile(".env.example", "STRIPE_SECRET=");
+      e._setup.stage(".env"); e._setup.stage(".env.example");
+      return {};
+    },
+    goal(e) {
+      const r = e.state.remote;
+      const id = r && r.branches["feature/env-template"];
+      const t = id ? r.commits[id].tree : {};
+      return id === e.headId()
+        && t[".env.example"] !== undefined
+        && t[".env"] === undefined
+        && e.state.files[".env"] === "STRIPE_SECRET=sk_live_123";
+    },
+  });
+
+  m({
+    id: "rollback-release", num: 29, diff: "dificil", title: "Rollback de release publicada",
+    context: "La release 2.7 ya está en origin/main y rompió el login. Como está publicada, no se borra: se revierte con un commit nuevo y se empuja.",
+    briefing: "Cuando el commit malo ya salió al remoto, revertir mantiene una historia clara para todo el equipo.",
+    deliverable: "Ejecuta `git revert HEAD` y publica el rollback con `git push`.",
+    objective: "Deshaz la release publicada sin reescribir historia.",
+    watch: "Debe aparecer un commit nuevo `Revert ...` encima del release malo, y origin/main debe moverse a ese rollback.",
+    par: 2,
+    hints: ["No uses reset en historia publicada.", "`git revert HEAD` crea el commit de rollback.", "Luego `git push` comparte el arreglo."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("login.js", "export const login = () => true"); e._setup.stage("login.js");
+      e._setup.commit("login estable");
+      e._setup.writeFile("login.js", "export const login = () => false"); e._setup.stage("login.js");
+      e._setup.commit("release 2.7");
+      e._setup.addRemote("github.com/acme/app.git");
+      return {};
+    },
+    goal(e) {
+      const h = e.state.commits[e.headId()];
+      const t = e.treeOf(e.headId());
+      return h && h.msg.startsWith("Revert")
+        && t["login.js"] === "export const login = () => true"
+        && e.state.remote.branches.main === e.headId();
+    },
+  });
+
+  m({
+    id: "sprint-cierre", num: 30, diff: "dificil", title: "Cierre de sprint",
+    context: "Última tarea del sprint: main recibió un contrato API nuevo y tú debes agregar `reportes.js`. Hay un `debug.log` local que no debe subirse.",
+    briefing: "Este flujo junta lo cotidiano: sincronizar, abrir rama, commitear solo lo correcto, fusionar y publicar main limpio.",
+    deliverable: "Haz pull, crea `feature/reportes`, agrega `reportes.js`, commitea solo ese archivo, vuelve a main, fusiona y haz push.",
+    objective: "Completa un flujo real de principio a fin sin publicar `debug.log`.",
+    watch: "El árbol debe integrar el commit remoto y tu rama; al final main y origin/main quedan en el mismo nodo.",
+    par: 7,
+    hints: ["Arranca con `git pull`.", "Crea rama: `git switch -c feature/reportes`.", "Crea el archivo con `echo \"export const reportes = []\" > reportes.js`.", "Usa `git add reportes.js`, no `git add .`, luego commit, switch main, merge y push."],
+    setup(e) {
+      e._setup.init(); e._setup.writeFile("index.js", "export const app = true"); e._setup.stage("index.js");
+      e._setup.commit("base del sprint");
+      e._setup.addRemote("github.com/acme/dashboard.git");
+      e._setup.remoteCommit("API: contrato de reportes", { "api-contract.json": "{ \"reportes\": true }" });
+      e._setup.writeFile("debug.log", "trace local");
+      return {};
+    },
+    goal(e) {
+      const t = e.treeOf(e.headId());
+      return e.state.HEAD.branch === "main"
+        && e.state.remote.branches.main === e.headId()
+        && t["api-contract.json"] !== undefined
+        && t["reportes.js"] === "export const reportes = []"
+        && t["debug.log"] === undefined;
     },
   });
 

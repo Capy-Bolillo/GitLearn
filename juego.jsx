@@ -1,6 +1,6 @@
 // ============================================================
 // juego.jsx — Sección "Aprende Jugando"
-// Terminal simulada + árbol de commits protagonista + 20 misiones
+// Terminal guiada + árbol de commits protagonista + 30 misiones
 // ============================================================
 
 const PROGRESS_KEY = "git-guide-progress-v1";
@@ -364,6 +364,58 @@ function RemotePanel({ engine }) {
 
 }
 
+function RepoSummary({ engine }) {
+  const S = engine.state;
+  const head = engine.headId();
+  const remoteBranches = S.remote ? Object.keys(S.remote.branches).length : 0;
+  return (
+    <div className="repo-summary">
+      <span><b>{Object.keys(S.commits).length}</b> commits</span>
+      <span><b>{Object.keys(S.branches).length}</b> ramas</span>
+      <span><b>{S.HEAD ? S.HEAD.branch : "sin repo"}</b> HEAD</span>
+      <span><b>{head ? head.slice(0, 5) : "—"}</b> actual</span>
+      <span><b>{remoteBranches || "—"}</b> origin</span>
+    </div>
+  );
+}
+
+function MissionBriefPanel({ mission, progress, hintIdx, setHintIdx, onRestart }) {
+  const briefing = mission.context || mission.briefing;
+  const deliverable = mission.deliverable || mission.objective;
+  return (
+    <div className="mission-brief">
+      <div className="brief-numeral">
+        <span className="bn-label">misión</span>
+        <span className="bn-num">{String(mission.num).padStart(2, "0")}</span>
+      </div>
+      <div className="brief-body">
+        <div className="brief-headrow">
+          <h3>{mission.title}</h3>
+          <span className={"diff-badge diff-" + mission.diff}>{window.GIT_DIFF_LABEL[mission.diff]}</span>
+          {progress[mission.id] ? <Stars n={progress[mission.id]} /> : null}
+        </div>
+        <p className="mission-context"><strong>Contexto real · </strong><MdText text={briefing} /></p>
+        <p className="objective"><strong>Entrega · </strong><MdText text={deliverable} /></p>
+        {mission.watch && <p className="tree-watch"><strong>Observa · </strong><MdText text={mission.watch} /></p>}
+        <div className="brief-foot">
+          <span className="par-chip">3★ ≤ {mission.par === 0 ? "inspección" : mission.par + " cmd" + (mission.par > 1 ? "s" : "")}</span>
+          <button className="mhint-btn" onClick={() => setHintIdx((i) => i + 1)}>
+            💡 pedir pista <span className="hint-count">{Math.min(hintIdx, mission.hints.length)}/{mission.hints.length}</span>
+          </button>
+          <button className="mreset-btn" onClick={onRestart}>↺ reiniciar</button>
+        </div>
+        {hintIdx > 0 &&
+        <div className="mhint">
+            {mission.hints.slice(0, Math.min(hintIdx, mission.hints.length)).map((h, i) =>
+          <div key={i} style={{ padding: "2px 0" }}>💡 <MdText text={h} /></div>
+          )}
+          </div>
+        }
+      </div>
+    </div>
+  );
+}
+
 // ---------------- Terminal ----------------
 const HELP_LINES = [
 { text: "Comandos de Git:  init · status · add · commit -m \"msg\" · log · branch [-d] · switch [-c] · merge · push · pull · fetch · clone · reset · restore · revert", type: "info" },
@@ -472,7 +524,8 @@ function GameSection() {
     setFx(null);
     setLines([
     { text: "── Misión " + String(mm.num).padStart(2, "0") + ": " + mm.title + " ──", type: "accent" },
-    { text: mm.briefing, type: "info" },
+    { text: mm.context || mm.briefing, type: "info" },
+    { text: "Entrega: " + (mm.deliverable || mm.objective), type: "sys" },
     { text: "Escribe help si te pierdes · pista si necesitas ayuda.", type: "sys" }]
     );
     setTick((t) => t + 1);
@@ -526,6 +579,7 @@ function GameSection() {
 
   const totalStars = missions.reduce((a, mm) => a + (progress[mm.id] || 0), 0);
   const completedCount = missions.filter((mm) => progress[mm.id]).length;
+  const maxStars = missions.length * 3;
 
   const groups = [
   { key: "facil", color: "var(--green)" },
@@ -538,17 +592,17 @@ function GameSection() {
   return (
     <div className="section-wrap wide">
       <div className="sec-kicker">03 · Aprende jugando</div>
-      <h2 className="sec-title">20 misiones, una terminal de verdad</h2>
+      <h2 className="sec-title">{missions.length} misiones, flujos de trabajo reales</h2>
       <p className="sec-sub">
-        Escribe comandos reales de Git y mira el árbol reaccionar en vivo: cada commit dibuja un nodo,
-        cada rama una etiqueta, cada push mueve a origin. Menos comandos = más estrellas.
+        Practica comandos reales de Git en escenarios de equipo: cada commit dibuja un nodo,
+        cada rama mueve una etiqueta y cada sincronización explica qué cambió en origin.
       </p>
       <div className="game-hero-stats">
-        <div className="gstat"><span className="v">{completedCount}<span style={{ color: "var(--text-faint)", fontSize: 17 }}>/20</span></span><span className="l">misiones completadas</span></div>
-        <div className="gstat"><span className="v" style={{ color: "var(--green)" }}>{totalStars}<span style={{ color: "var(--text-faint)", fontSize: 17 }}>/60</span></span><span className="l">estrellas</span></div>
+        <div className="gstat"><span className="v">{completedCount}<span style={{ color: "var(--text-faint)", fontSize: 17 }}>/{missions.length}</span></span><span className="l">misiones completadas</span></div>
+        <div className="gstat"><span className="v" style={{ color: "var(--green)" }}>{totalStars}<span style={{ color: "var(--text-faint)", fontSize: 17 }}>/{maxStars}</span></span><span className="l">estrellas</span></div>
       </div>
 
-      <div className="game-layout">
+      <div className="game-workspace">
         <aside className="mission-list">
           <div className="mission-list-head"><h3>Misiones</h3></div>
           <div className="mission-scroll">
@@ -577,35 +631,14 @@ function GameSection() {
           </div>
         </aside>
 
-        <div className="game-main">
-          <div className="mission-brief">
-            <div className="brief-numeral">
-              <span className="bn-label">misión</span>
-              <span className="bn-num">{String(mission.num).padStart(2, "0")}</span>
-            </div>
-            <div className="brief-body">
-              <div className="brief-headrow">
-                <h3>{mission.title}</h3>
-                <span className={"diff-badge diff-" + mission.diff}>{window.GIT_DIFF_LABEL[mission.diff]}</span>
-                {progress[mission.id] ? <Stars n={progress[mission.id]} /> : null}
-              </div>
-              <p className="objective"><strong>Objetivo · </strong><MdText text={mission.objective} /></p>
-              <div className="brief-foot">
-                <span className="par-chip">3★ ≤ {mission.par === 0 ? "inspección" : mission.par + " cmd" + (mission.par > 1 ? "s" : "")}</span>
-                <button className="mhint-btn" onClick={() => setHintIdx((i) => i + 1)}>
-                  💡 pedir pista <span className="hint-count">{Math.min(hintIdx, mission.hints.length)}/{mission.hints.length}</span>
-                </button>
-                <button className="mreset-btn" onClick={() => startMission(activeIdx)}>↺ reiniciar</button>
-              </div>
-              {hintIdx > 0 &&
-              <div className="mhint">
-                  {mission.hints.slice(0, Math.min(hintIdx, mission.hints.length)).map((h, i) =>
-                <div key={i} style={{ padding: "2px 0" }}>💡 <MdText text={h} /></div>
-                )}
-                </div>
-              }
-            </div>
-          </div>
+        <section className="command-column">
+          <MissionBriefPanel
+            mission={mission}
+            progress={progress}
+            hintIdx={hintIdx}
+            setHintIdx={setHintIdx}
+            onRestart={() => startMission(activeIdx)}
+          />
 
           {doneStars &&
           <div className="mission-done-card">
@@ -629,34 +662,36 @@ function GameSection() {
             </div>
           }
 
-          <div className="tree-row">
-            {engineRef.current &&
-            <div className="viz-card tree-card">
+          {engineRef.current &&
+          <Terminal engine={engineRef.current} mission={mission}
+          onCommand={handleCommand} lines={lines} setLines={setLines} tick={tick} />
+          }
+
+          {engineRef.current &&
+          <div className="repo-state-strip">
+              <FileZones engine={engineRef.current} tick={tick} />
+            </div>
+          }
+        </section>
+
+        <section className="repo-column">
+          {engineRef.current &&
+          <div className="viz-card tree-card tree-card-hero">
+              <div className="tree-title-row">
                 <h4>
                   <span className="zone-dot" style={{ background: "var(--violet)" }}></span>
                   Árbol del repositorio
                   {S && S.initialized && S.HEAD ? <span className="tree-branch">· rama {S.HEAD.branch}</span> : null}
                 </h4>
-                <EventFeed fx={fx} />
-                <div className="tree-canvas">
-                  <CommitGraph engine={engineRef.current} tick={tick} fx={fx} />
-                </div>
+                <RepoSummary engine={engineRef.current} />
               </div>
-            }
-          </div>
-
-          <div className="console-row">
-            {engineRef.current &&
-            <Terminal engine={engineRef.current} mission={mission}
-            onCommand={handleCommand} lines={lines} setLines={setLines} tick={tick} />
-            }
-            {engineRef.current &&
-            <div className="repo-side">
-                <FileZones engine={engineRef.current} tick={tick} />
+              <EventFeed fx={fx} />
+              <div className="tree-canvas">
+                <CommitGraph engine={engineRef.current} tick={tick} fx={fx} />
               </div>
-            }
-          </div>
-        </div>
+            </div>
+          }
+        </section>
       </div>
     </div>);
 
